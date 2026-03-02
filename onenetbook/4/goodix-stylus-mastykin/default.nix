@@ -25,8 +25,22 @@ let
     cat ${patch1_original} > $out
     ${patch}/bin/patch $out < ${./6.12.patch.patch}
   '';
+  patch1_updated_6_18 = runCommand "goodix-stylus-mastykin-1-pen-support-6.18.patch" {}
+  ''
+    cat ${patch1_original} > $out
+    ${patch}/bin/patch $out < ${./6.18.patch.patch}
+  '';
+  patch1_updated_7_0 = runCommand "goodix-stylus-mastykin-1-pen-support-7.0.patch" {}
+  ''
+    cat ${patch1_original} > $out
+    ${patch}/bin/patch $out < ${./7.0.patch.patch}
+  '';
   patch1 =
-    if (lib.versionAtLeast kernel.version "6.12") then
+    if (lib.versionAtLeast kernel.version "7.0") then
+      patch1_updated_7_0
+    else if (lib.versionAtLeast kernel.version "6.18") then
+      patch1_updated_6_18
+    else if (lib.versionAtLeast kernel.version "6.12") then
       patch1_updated_6_12
     else if (lib.versionAtLeast kernel.version "6.1") then
       patch1_updated_6_1
@@ -59,7 +73,9 @@ stdenv.mkDerivation rec {
   postUnpack = ''
     tar -C goodix-stylus-mastykin \
       --strip-components=3 -xf ${kernel.src} --wildcards \
-      '*/drivers/hid/hid-ids.h' '*/drivers/hid/hid-multitouch.c'
+      '*/drivers/hid/hid-ids.h' \
+      '*/drivers/hid/hid-haptic.h' \
+      '*/drivers/hid/hid-multitouch.c'
   '';
   patchFlags = "-p3";
   postPatch = ''

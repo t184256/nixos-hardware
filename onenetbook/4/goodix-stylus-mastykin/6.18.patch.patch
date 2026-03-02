@@ -1,0 +1,153 @@
+--- goodix-stylus-mastykin-1-pen-support.patch	2026-03-04 00:15:06.774903507 +0100
++++ 6.18.patch	2026-03-04 00:18:41.741924659 +0100
+@@ -1,8 +1,10 @@
++diff --git a/drivers/hid/hid-multitouch.c b/drivers/hid/hid-multitouch.c
++index 179dc316b4b5..e6ea07d20d23 100644
+ --- a/drivers/hid/hid-multitouch.c
+ +++ b/drivers/hid/hid-multitouch.c
+-@@ -48,6 +48,9 @@
++@@ -51,6 +51,9 @@ MODULE_LICENSE("GPL");
+  
+- #include "hid-ids.h"
++ #include "hid-haptic.h"
+  
+ +// #define MY(fmt,arg...) printk(KERN_INFO "%s: " fmt "\n", __func__, ##arg)
+ +#define MY(fmt,arg...)
+@@ -10,15 +12,15 @@
+  /* quirks to control the device */
+  #define MT_QUIRK_NOT_SEEN_MEANS_UP	BIT(0)
+  #define MT_QUIRK_SLOT_IS_CONTACTID	BIT(1)
+-@@ -70,6 +73,7 @@
+- #define MT_QUIRK_WIN8_PTP_BUTTONS	BIT(18)
+- #define MT_QUIRK_SEPARATE_APP_REPORT	BIT(19)
+- #define MT_QUIRK_FORCE_MULTI_INPUT	BIT(20)
+-+#define MT_QUIRK_NON_MT_PEN		BIT(21)
++@@ -76,6 +79,7 @@ MODULE_LICENSE("GPL");
++ #define MT_QUIRK_DISABLE_WAKEUP		BIT(21)
++ #define MT_QUIRK_ORIENTATION_INVERT	BIT(22)
++ #define MT_QUIRK_APPLE_TOUCHBAR		BIT(23)
+++#define MT_QUIRK_NON_MT_PEN		BIT(24)
+  
+  #define MT_INPUTMODE_TOUCHSCREEN	0x02
+  #define MT_INPUTMODE_TOUCHPAD		0x03
+-@@ -100,6 +104,9 @@
++@@ -112,6 +116,9 @@ struct mt_usages {
+  	bool *tip_state;	/* is the touch valid? */
+  	bool *inrange_state;	/* is the finger in proximity of the sensor? */
+  	bool *confidence_state;	/* is the touch made by a finger? */
+@@ -28,7 +30,7 @@
+  };
+  
+  struct mt_application {
+-@@ -153,6 +160,7 @@
++@@ -164,6 +171,7 @@ struct mt_report_data {
+  	struct hid_report *report;
+  	struct mt_application *application;
+  	bool is_mt_collection;
+@@ -36,17 +38,17 @@
+  };
+  
+  struct mt_device {
+-@@ -208,6 +216,7 @@
+- #define MT_CLS_GOOGLE				0x0111
++@@ -229,6 +237,7 @@ static void mt_post_parse(struct mt_device *td, struct mt_application *app);
+  #define MT_CLS_RAZER_BLADE_STEALTH		0x0112
+  #define MT_CLS_SMART_TECH			0x0113
+-+#define MT_CLS_NON_MT_PEN			0x0114
++ #define MT_CLS_APPLE_TOUCHBAR			0x0114
+++#define MT_CLS_NON_MT_PEN			0x0115
++ #define MT_CLS_SIS				0x0457
+  
+  #define MT_DEFAULT_MAXCONTACT	10
+- #define MT_MAX_MAXCONTACT	250
+-@@ -374,6 +383,9 @@
+- 			MT_QUIRK_CONTACT_CNT_ACCURATE |
+- 			MT_QUIRK_SEPARATE_APP_REPORT,
++@@ -425,6 +434,9 @@ static const struct mt_class mt_classes[] = {
++ 			MT_QUIRK_ALWAYS_VALID |
++ 			MT_QUIRK_CONTACT_CNT_ACCURATE,
+  	},
+ +	{ .name = MT_CLS_NON_MT_PEN,
+ +		.quirks = MT_QUIRK_NON_MT_PEN,
+@@ -54,7 +56,7 @@
+  	{ }
+  };
+  
+-@@ -523,6 +535,9 @@
++@@ -576,6 +588,9 @@ static struct mt_usages *mt_allocate_usage(struct hid_device *hdev,
+  	usage->tip_state = DEFAULT_FALSE;
+  	usage->inrange_state = DEFAULT_FALSE;
+  	usage->confidence_state = DEFAULT_TRUE;
+@@ -64,7 +66,7 @@
+  
+  	list_add_tail(&usage->list, &application->mt_usages);
+  
+-@@ -877,6 +892,67 @@
++@@ -959,6 +974,67 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
+  	return 0;
+  }
+  
+@@ -132,8 +134,8 @@
+  static int mt_compute_slot(struct mt_device *td, struct mt_application *app,
+  			   struct mt_usages *slot,
+  			   struct input_dev *input)
+-@@ -1242,6 +1318,34 @@
+- 	clear_bit(MT_IO_FLAGS_RUNNING, &td->mt_io_flags);
++@@ -1347,6 +1423,34 @@ static void mt_touch_report(struct hid_device *hid,
++ 	clear_bit_unlock(MT_IO_FLAGS_RUNNING, &td->mt_io_flags);
+  }
+  
+ +static void mt_pen_report(struct hid_device *hid,
+@@ -167,7 +169,7 @@
+  static int mt_touch_input_configured(struct hid_device *hdev,
+  				     struct hid_input *hi,
+  				     struct mt_application *app)
+-@@ -1347,6 +1451,14 @@
++@@ -1470,6 +1574,14 @@ static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
+  		return 1;
+  	}
+  
+@@ -182,7 +184,7 @@
+  	if (rdata->is_mt_collection)
+  		return mt_touch_input_mapping(hdev, hi, field, usage, bit, max,
+  					      application);
+-@@ -1370,7 +1482,7 @@
++@@ -1498,7 +1610,7 @@ static int mt_input_mapped(struct hid_device *hdev, struct hid_input *hi,
+  	struct mt_report_data *rdata;
+  
+  	rdata = mt_find_report_data(td, field->report);
+@@ -191,7 +193,7 @@
+  		/* We own these mappings, tell hid-input to ignore them */
+  		return -1;
+  	}
+-@@ -1404,6 +1516,8 @@
++@@ -1564,6 +1676,8 @@ static void mt_report(struct hid_device *hid, struct hid_report *report)
+  	rdata = mt_find_report_data(td, report);
+  	if (rdata && rdata->is_mt_collection)
+  		return mt_touch_report(hid, rdata);
+@@ -200,9 +202,22 @@
+  
+  	if (field && field->hidinput && field->hidinput->input)
+  		input_sync(field->hidinput->input);
+-@@ -2151,6 +2265,11 @@
+- 		HID_DEVICE(HID_BUS_ANY, HID_GROUP_ANY, USB_VENDOR_ID_GOOGLE,
+- 			USB_DEVICE_ID_GOOGLE_TOUCH_ROSE) },
++@@ -1882,8 +1996,11 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
++ 	 */
++ 	if (hdev->quirks & (HID_QUIRK_X_INVERT | HID_QUIRK_Y_INVERT) &&
++ 	    !((hdev->quirks & HID_QUIRK_X_INVERT)
++-	      && (hdev->quirks & HID_QUIRK_Y_INVERT)))
+++	      && (hdev->quirks & HID_QUIRK_Y_INVERT))) {
++ 		td->mtclass.quirks = MT_QUIRK_ORIENTATION_INVERT;
+++		if (td->mtclass == MT_CLS_NON_MT_PEN)
+++			td->mtclass.quirks |= MT_QUIRK_NON_MT_PEN;
+++	}
++ 
++ 	/* This allows the driver to correctly support devices
++ 	 * that emit events over several HID messages.
++@@ -2447,6 +2564,11 @@ static const struct hid_device_id mt_devices[] = {
++ 		HID_DEVICE(BUS_I2C, HID_GROUP_MULTITOUCH_WIN_8,
++ 			   I2C_VENDOR_ID_HANTICK, I2C_PRODUCT_ID_HANTICK_5288) },
+  
+ +	{ .driver_data = MT_CLS_NON_MT_PEN,
+ +		HID_DEVICE(BUS_I2C, HID_GROUP_MULTITOUCH_WIN_8,
